@@ -86,7 +86,7 @@ licence it is under is the one below.
 
 ## License
 
-Business Source License 1.1, `LICENSE` in this directory. Licensor **PT IRSofka**, Additional Use
+Business Source License 1.1, `LICENSE` in this directory. Licensor **PT IRSofka Data Teknologi**, Additional Use
 Grant **None**, Change Date **four years after each version is first made publicly available** (each
 version carries its own date), Change License **MIT**.
 
@@ -95,12 +95,13 @@ In practice:
 - you may read it, run it, copy it, modify it, build on it, and use it for anything that is not
   production;
 - production use — running it as part of something you operate for users or for revenue — needs a
-  paid commercial licence from PT IRSofka;
+  paid commercial licence from the Licensor;
 - every version of this code becomes MIT four years after it is published, so nothing here is
   locked forever; the newer versions simply cost a licence until they age;
 - the name and logo are not licensed. Fork the code freely, do not call your fork IRSofka.
 
-Showcase and commercial enquiries: <https://irsofka.co.id>
+Licensor is **PT IRSofka Data Teknologi**, registered in Indonesia under NIB **1258 0003 4132 6** (OSS) and DUNS **5645 3618 4**.
+Commercial licence and showcase enquiries: <admin@irsofka.co.id> — <https://irsofka.co.id>
 
 ## Registering it
 
