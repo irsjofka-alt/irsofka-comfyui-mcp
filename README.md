@@ -60,6 +60,12 @@ Nothing here is quoted from documentation. RTX 3060 12 GB, ComfyUI Desktop stand
 | `POST /prompt` with an unknown class | `400 {"type":"missing_node_type"}` **and nothing queued** — verified by re-reading `/queue` |
 | `GET /object_info/<unknown node>` | `200` with `{}`. The status code is not the verdict; an empty body is |
 | gate decision on a 3D submit, live | `DENY`, rule `3d-trellis`, need 9966 MiB, free 7498 MiB, shortfall 2468 MiB, holders named |
+| a submit the gate allowed, live | `prompt_id 166cbff0…`, rule `image-diffusion`, need 5919 MiB against 7241 MiB free, finished in **21.0 s** |
+| its output, fetched by `comfy_fetch` | 1 290 126 bytes, `PNG 832 x 1216 8-bit RGB`, sha256 `2ea33e87…e4e5` |
+
+The submit above needed no hand-written node wiring: `GET /history` hands back the graph that produced
+each past run inside `prompt[2]`, which is a valid API-format graph on the machine that ran it. Read a
+finished job, change the seed and the prompt, submit that.
 
 Two numbers for "free VRAM" are on purpose. ComfyUI reports what it can allocate inside its own
 torch pool; the whole-card meter reports what the card has left, including what other processes hold.
