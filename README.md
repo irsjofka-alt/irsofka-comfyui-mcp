@@ -3,8 +3,9 @@
 A stdio [Model Context Protocol](https://modelcontextprotocol.io) server for the ComfyUI you run
 yourself. Seven tools over ComfyUI's own HTTP API — no cloud, no account, no telemetry.
 
-What makes it different from the other ComfyUI MCPs is one line of behaviour: **a submit that the
-machine cannot pay for is refused before it is sent, and the refusal names who is holding the VRAM.**
+Its central behaviour is one line: **a submit that the machine cannot pay for is refused before it is
+sent, and the refusal names who is holding the VRAM.** Whether other ComfyUI MCPs do this was not
+measured, so no claim is made about them — only about this tree.
 On the workstation this was built on, that is not a hypothetical. A 3D job once asked for 9.73 GiB on
 a card with 6.38 GiB free, and the only thing standing in the way was a sentence in a documentation
 file that the engine making the request was not reading.
@@ -72,11 +73,16 @@ torch pool; the whole-card meter reports what the card has left, including what 
 The gate decides on the whole-card number, because an OOM does not respect the boundary between
 "my process" and "someone else's".
 
-## Clean room, and what that costs
+## How this was written, and what that costs
 
-No upstream MCP source was read or copied to build this. It speaks only to ComfyUI's documented HTTP
-API, with the Python standard library, in the same hand-rolled JSON-RPC-over-stdio style this
-workstation already uses for its own desktop MCP server.
+Written against ComfyUI's own documented HTTP API, with the Python standard library, in the same
+hand-rolled JSON-RPC-over-stdio style this workstation already uses for its own desktop MCP server.
+**No line of any upstream MCP server is in this tree — nothing was copied, translated or adapted.**
+Said plainly because the strict meaning of "clean room" is that the implementers never saw the
+original, and that is not what happened: `comfy-mcp`'s `server.py` was read once, to count its tool
+definitions for a documentation correction, and its `LICENSE` and `NOTICE` were read for the analysis
+below. Exposure happened; derivation did not. Read it as the whole answer rather than inferring more
+protection from the phrase "clean room" than the history supports.
 
 That is a legal choice as much as a technical one. ComfyUI is **GPL-3.0-or-later**; the two better-known
 MCP servers around it are **AGPL-3.0** (one of them dual-licensed "AGPL or commercial"). A work built
