@@ -1,0 +1,34 @@
+# IRSofka ComfyUI MCP — packaging metadata only. The server has no third-party dependencies:
+# it speaks ComfyUI's HTTP API with the standard library, so installing it cannot drag a
+# licence into a project that did not ask for one.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "irsofka-comfyui-mcp"
+version = "0.1.0"
+description = "Model Context Protocol server for a self-hosted ComfyUI, with a VRAM gate in front of every submit"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "BSL-1.1"
+license-files = ["LICENSE"]
+authors = [{ name = "PT IRSofka", email = "hello@irsofka.co.id" }]
+keywords = ["comfyui", "mcp", "model-context-protocol", "vram", "image-generation"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Graphics",
+]
+
+[project.scripts]
+irsofka-comfyui-mcp = "server:main"
+
+[project.urls]
+Homepage = "https://irsofka.co.id"
+Issues = "https://irsofka.co.id"
+
+[tool.setuptools]
+py-modules = ["server", "vram"]
