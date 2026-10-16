@@ -378,6 +378,22 @@ def selftest() -> int:
     finally:
         _sh(["rm", "-rf", str(fake)])
 
+    # Jumlah yang ditulis README adalah satu-satunya angka yang dibaca orang yang tidak menjalankan
+    # apa pun. Verifier ronde publikasi menemukan angka 12 di README sementara suite menjalankan 16 —
+    # dan koreksi angka saja tidak cukup, karena angka itu akan busuk lagi pada check berikutnya.
+    # Check terakhir ini membandingkan angka README dengan jumlah yang benar-benar dijalankan
+    # (termasuk dirinya), jadi README tidak bisa lagi mengklaim jumlah yang salah.
+    import re as _re
+    _readme = (REPO / "README.md").read_text(errors="replace") if (REPO / "README.md").is_file() else ""
+    _claimed = sorted({int(n) for n in _re.findall(r"#\s*(\d+)\s+checks?", _readme)})
+    _total = len(results) + 1
+    check(
+        f"jumlah check yang DITULIS README sama dengan yang benar-benar berjalan "
+        f"({len(_claimed)} angka di README vs {_total} yang jalan)",
+        _claimed == [_total],
+        f"README menulis {(_claimed or 'tidak ada')}, yang jalan {_total}",
+    )
+
     bad = [n for ok, n, _d in results if not ok]
     print(f"\nirsofka-comfyui-mcp selftest: {len(results) - len(bad)}/{len(results)} sesuai")
     for n in bad:

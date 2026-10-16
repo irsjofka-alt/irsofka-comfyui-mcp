@@ -16,7 +16,7 @@ file that the engine making the request was not reading.
 
 ```
 $ python3 server.py --status | head -20          # read-only, safe
-$ python3 server.py --selftest                   # 12 checks, no ComfyUI needed, no request ever sent
+$ python3 server.py --selftest                   # 17 checks, no ComfyUI needed, no request ever sent
 ```
 
 ## The gate

@@ -116,15 +116,9 @@ def decide(text: str) -> dict:
     return res
 
 
-def report() -> dict:
-    """What the operator sees in `irsofka_gpu_gate`: which gate is live and what it says now."""
-    gate, root = _load_gate()
-    if gate is None or os.environ.get(GATE_ENV, "").strip().lower() == "off":
-        return {"gate": mode(), "root": str(root) if root else None}
-    try:
-        st = gate.status()
-    except Exception as exc:  # a status that cannot be read is reported as such
-        return {"gate": "ai-station", "root": str(root), "error": str(exc)[:200]}
-    return {"gate": "ai-station", "root": str(root),
-            "free_mib": st.get("free_mib"), "readable": st.get("readable"),
-            "holders": st.get("holders"), "rules": st.get("rules")}
+# Tidak ada `report()` di sini, dan itu keputusan yang diukur. Versi lama punya fungsi itu dengan
+# docstring "what the operator sees in irsofka_gpu_gate" — padahal tool itu memanggil `decide()`,
+# dan tidak ada satu pun pemanggil `report()` di seluruh repo. Fungsi mati yang mengklaim mewakili
+# angka hidup adalah dua definisi untuk satu kata, dan yang mati tidak akan pernah dibetulkan.
+# Stasiun sudah publishes pembacaannya sendiri (`tools/gpu_gate.py status`); salinan keduanya di
+# server yang tidak pernah membacanya bukan fitur, hanya utang.
