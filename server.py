@@ -11,6 +11,7 @@ Diukur pada sha e0101b2312f30501664dabe4a74c1283c4268eb8 (v1.1.1, Apache-2.0, 41
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import inspect
 import json
@@ -485,6 +486,28 @@ def selftest() -> int:
           "proses menggantung)",
           bool(_advertised) and not _missing,
           f"diiklankan={_advertised} tidak ditangani={_missing}")
+
+    # 3f. Dependensi yang diklaim README harus terbukti dari kode, bukan dari kalimat. Yang diukur
+    # adalah impor LEVEL-ATAS dari dua berkas stasiun -- itulah yang dibaca seorang pemasang dan
+    # itulah dasar daftar dependensi. Impor basis di dalam `_load_base()` terjadi setelah sys.path
+    # menunjuk ke `upstream/`, jadi ia bukan dependensi instalasi dan memang tidak diklaim begitu.
+    _allowed_roots = set(sys.stdlib_module_names) | {"mcp", "vram"}
+    _roots: set[str] = set()
+    for _fname in ("server.py", "vram.py"):
+        _fp = REPO / _fname
+        if not _fp.is_file():
+            continue
+        _tree = ast.parse(_fp.read_text(errors="replace"))
+        for _n in _tree.body:
+            if isinstance(_n, ast.Import):
+                _roots.update(a.name.split(".")[0] for a in _n.names)
+            elif isinstance(_n, ast.ImportFrom) and _n.level == 0 and _n.module:
+                _roots.add(_n.module.split(".")[0])
+    _foreign = sorted(_roots - _allowed_roots)
+    check("impor level-atas dua berkas stasiun hanya pustaka standar + mcp (+ modul gerbang kami) "
+          "-- klaim dependensi README diukur, bukan ditulis",
+          bool(_roots) and not _foreign,
+          f"asing={_foreign} semua={sorted(_roots)}")
 
     # 4. Provenance & License honesty
     st, why = _upstream_claims_are_true()

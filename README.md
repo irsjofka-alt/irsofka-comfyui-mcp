@@ -22,7 +22,7 @@ file that the engine making the request was not reading.
 
 ```
 $ python3 server.py --status | head -20          # read-only, safe
-$ python3 server.py --selftest                   # 21 checks, no ComfyUI needed, no request ever sent
+$ python3 server.py --selftest                   # 22 checks, no ComfyUI needed, no request ever sent
 ```
 
 ## The gate
@@ -123,7 +123,7 @@ installs the station layer **only** — the base is loaded from `upstream/` besi
 internal imports use bare top-level names (`tools`, `models`, `managers`) that must not be installed
 into site-packages. There is therefore deliberately no console script: an entry point that cannot work
 is worse than none, which is the same lesson the packaging audit produced today. The AST scan in the selftest
-confirms our two files import only the standard library plus `mcp` — the third-party imports live in
+confirms the **top-level** imports of our two files are only the standard library plus `mcp` — the third-party imports live in
 the vendored base, which is exactly why the dependency list above is not empty. The station's gate is
 imported lazily and only when a workstation is present, so it is a bridge, not a dependency.
 
