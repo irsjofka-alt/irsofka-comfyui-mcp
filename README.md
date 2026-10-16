@@ -8,7 +8,13 @@ tools. No cloud, no account, no telemetry — and nothing that reaches outside t
 say so.
 
 Its central behaviour is one line: **a submit that the machine cannot pay for is refused before it is
-sent, and the refusal names who is holding the VRAM.** Whether other ComfyUI MCPs do this was not
+sent, and the refusal names who is holding the VRAM.** The refusal is installed in code, not asked of
+the caller: `guard_submits()` replaces `ComfyUIClient.run_custom_workflow` on the client instance
+before the base's tools are registered, and every submit tool in the vendored tree calls that
+attribute (`tools/generation.py:105`, `tools/generation.py:415`, `tools/workflow.py:75`), so nothing
+reaches `POST /prompt` without a verdict. A blocked submit returns `VRAM_GATE_REFUSED` as data — with
+the state, the reason and the opt-in — rather than raising, and the base cannot silently grow a new
+submit path that bypasses it. Whether other ComfyUI MCPs do this was not
 measured, so no claim is made about them — only about this tree.
 On the workstation this was built on, that is not a hypothetical. A 3D job once asked for 9.73 GiB on
 a card with 6.38 GiB free, and the only thing standing in the way was a sentence in a documentation
@@ -16,7 +22,7 @@ file that the engine making the request was not reading.
 
 ```
 $ python3 server.py --status | head -20          # read-only, safe
-$ python3 server.py --selftest                   # 17 checks, no ComfyUI needed, no request ever sent
+$ python3 server.py --selftest                   # 20 checks, no ComfyUI needed, no request ever sent
 ```
 
 ## The gate

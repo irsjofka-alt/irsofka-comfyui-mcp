@@ -33,6 +33,11 @@ NETWORK_TOOLS = {
     "view_image": "asset_processor.py:215 fetch_asset_bytes (mengunduh gambar dari URL eksternal http/https)",
 }
 
+# Diisi oleh build() dan dibaca `irsofka_surface_policy`. Kosong berarti belum ada client yang
+# bisa dijaga — dan alat itu harus bisa membedakan "gerbang terpasang" dari "belum pernah dibangun",
+# karena mengklaim pencegahan tanpa client adalah klaim tanpa bukti.
+_GATE_REPORT: dict = {}
+
 COMFYUI_URL = os.getenv("COMFYUI_URL", "http://localhost:8188")
 ASSET_TTL_HOURS = int(os.getenv("COMFY_MCP_ASSET_TTL_HOURS", "24"))
 COMFYUI_OUTPUT_ROOT = os.getenv("COMFYUI_OUTPUT_ROOT")
@@ -76,6 +81,11 @@ def _load_base():
     workflow_dir = UPSTREAM_DIR / "workflows"
 
     client = ComfyUIClient(COMFYUI_URL)
+    # Gerbang dipasang SEBELUM tool basis didaftarkan: tool memanggil
+    # `comfyui_client.run_custom_workflow(...)`, jadi pencarian atribut terjadi saat pemanggilan dan
+    # penggantian atribut instance ini mencegat setiap submit — termasuk tool yang belum ada hari ini.
+    _GATE_REPORT.clear()
+    _GATE_REPORT.update(guard_submits(client))
     wf_mgr = WorkflowManager(workflow_dir)
     defaults_mgr = DefaultsManager(client)
     asset_reg = AssetRegistry(ttl_hours=ASSET_TTL_HOURS, comfyui_base_url=COMFYUI_URL)
@@ -102,6 +112,68 @@ def _load_base():
         register_publish_tools(mcp, asset_reg, pub_mgr)
 
     return mcp, client, wf_mgr, defaults_mgr, asset_reg, pub_mgr
+
+
+def _workflow_text(workflow) -> str:
+    """Ringkas sebuah workflow menjadi teks yang bisa dibaca classifier stasiun.
+
+    Yang dikirim ke gerbang adalah isi graph (class_type + string input), bukan objek workflow
+    mentah: gerbang memotong berdasarkan kata kerja beban (flux/sdxl/trellis/...), dan ia hanya
+    bisa menemukan kata itu kalau yang diperiksa adalah teks, bukan pointer.
+    """
+    parts: list[str] = []
+    if isinstance(workflow, dict):
+        for node in workflow.values():
+            if isinstance(node, dict):
+                ct = node.get("class_type")
+                if ct:
+                    parts.append(str(ct))
+                inputs = node.get("inputs")
+                if isinstance(inputs, dict):
+                    for v in inputs.values():
+                        if isinstance(v, str):
+                            parts.append(v)
+    return " ".join(parts)[:4000]
+
+
+def guard_submits(client) -> dict:
+    """Place the VRAM gate on the one submit path every base tool uses.
+
+    Measured at the vendored sha: `tools/generation.py:105`, `tools/generation.py:415` and
+    `tools/workflow.py:75` all call `comfyui_client.run_custom_workflow(...)`. Attribute lookup
+    happens at call time, so replacing this instance attribute intercepts every submit — not a
+    convention asking callers to be careful, and not a per-tool wrapper that silently misses the
+    next tool the base adds. A refusal is returned as data, not raised: a caller can read why
+    nothing was submitted.
+
+    This is what makes the README's claim — a submit the machine cannot pay for is refused before
+    it is sent — a property of the code rather than a hope about the prompt.
+    """
+    import vram
+
+    original = getattr(client, "run_custom_workflow", None)
+    if not callable(original):
+        return {"installed": False, "why": "client tidak punya run_custom_workflow untuk dijaga"}
+    if getattr(client, "_irsofka_gate_installed", False):
+        return {"installed": True, "why": "gerbang sudah terpasang pada client ini"}
+
+    def gated(workflow, *args, **kwargs):
+        verdict = vram.decide(_workflow_text(workflow))
+        if not vram.is_go(verdict):
+            return {"error": "VRAM_GATE_REFUSED", "submitted": False,
+                    "state": verdict.get("state"), "gate": verdict.get("gate"),
+                    "why": verdict.get("why"),
+                    "override": f"{vram.GATE_ENV}=off untuk menerima risiko OOM sendiri"}
+        out = original(workflow, *args, **kwargs)
+        if isinstance(out, dict):
+            out = dict(out)
+            out["vram_gate"] = {"state": verdict.get("state"), "gate": verdict.get("gate"),
+                                "free_mib": verdict.get("free_mib")}
+        return out
+
+    client.run_custom_workflow = gated
+    client._irsofka_gate_installed = True
+    return {"installed": True, "intercepted": "ComfyUIClient.run_custom_workflow"}
 
 
 def apply_surface_policy(mcp_obj, *, allow_network: bool | None = None) -> dict:
@@ -148,12 +220,16 @@ def register_station_tools(mcp_obj) -> None:
         Ini lapisan kami, bukan milik upstream: keputusan diambil dari angka yang diukur detik ini
         (lihat `vram.py`), dan `UNKNOWN` dipakai ketika alat ukurnya tidak bisa dibaca — bukan
         sebagai izin diam-diam.
+
+        Alat ini JUGA jawabannya kalau sebuah submit ditolak: gerbang terpasang pada
+        `ComfyUIClient.run_custom_workflow` (lihat `guard_submits`), jadi submit yang mesin ini
+        tidak sanggup bayar berhenti di sini dengan state yang sama, tanpa dikirim ke ComfyUI.
         """
         return json.dumps(vram.decide(intent), indent=2)
 
     @mcp_obj.tool()
     def irsofka_surface_policy() -> str:
-        """Permukaan apa yang aktif sekarang, dan apa yang menunggu persetujuan operator."""
+        """Permukaan apa yang aktif sekarang, apa yang menunggu persetujuan operator, dan di mana gerbang duduk."""
         return json.dumps(
             {
                 "allow_network": network_allowed(),
@@ -161,6 +237,9 @@ def register_station_tools(mcp_obj) -> None:
                 "network_tools": NETWORK_TOOLS,
                 "comfyui_url": COMFYUI_URL,
                 "gate_vocab": list(vram.GATE_GO),
+                "gate_env": vram.GATE_ENV,
+                "submit_interception": dict(_GATE_REPORT) or {"installed": False,
+                                                              "why": "build() belum dijalankan"},
             },
             indent=2,
         )
@@ -343,6 +422,54 @@ def selftest() -> int:
         not any(("UNAVAILABLE" in t.upper() or "WAIT" in t.upper()) for t in _docs),
         "README/UPSTREAM/NOTICE menjanjikan state yang tidak ada di vram.decide()",
     )
+
+    # 3d. Klaim README bahwa "submit yang tidak sanggup dibayar mesin ditolak SEBELUM dikirim"
+    # hanya boleh tertulis kalau ia dicegah di kode. Yang diukur di sini adalah penyeratan itu:
+    # client palsu yang akan BERTERIMA KASIH kalau sempat dipanggil, dan gerbang yang tidak bisa
+    # mengukur harus membuat pemanggilan itu tidak pernah terjadi.
+    class _FakeClient:
+        def __init__(self):
+            self.calls = 0
+
+        def run_custom_workflow(self, workflow, *a, **kw):
+            self.calls += 1
+            return {"prompt_id": "TERSUBMIT"}
+
+    _saved_env = {k: os.environ.get(k) for k in ("AI_STATION_HOME", "IRSOFKA_COMFY_GATE")}
+    try:
+        with tempfile.TemporaryDirectory() as _empty:
+            os.environ["AI_STATION_HOME"] = _empty
+            os.environ.pop("IRSOFKA_COMFY_GATE", None)
+            fc = _FakeClient()
+            rep = guard_submits(fc)
+            out_refused = fc.run_custom_workflow(
+                {"1": {"class_type": "KSampler", "inputs": {"prompt": "flux sdxl render"}}})
+            check("tanpa meter submit DICEGAT sebelum menyentuh ComfyUI: tool basis tidak pernah "
+                  "memanggil client, dan jawabannya data, bukan exception",
+                  rep.get("installed") and out_refused.get("error") == "VRAM_GATE_REFUSED"
+                  and out_refused.get("submitted") is False and fc.calls == 0,
+                  json.dumps(out_refused)[:180])
+
+            os.environ["IRSOFKA_COMFY_GATE"] = "off"
+            fc2 = _FakeClient()
+            guard_submits(fc2)
+            out_off = fc2.run_custom_workflow({"1": {"class_type": "KSampler"}})
+            check("jalan keluar harus eksplisit dan benar-benar menembus: dengan "
+                  "IRSOFKA_COMFY_GATE=off submit diteruskan, bukan tetap tertahan diam-diam",
+                  out_off.get("prompt_id") == "TERSUBMIT" and fc2.calls == 1,
+                  json.dumps(out_off)[:160])
+
+            wf = {"7": {"class_type": "VAELoader", "inputs": {"vae_name": "flux.safetensors"}}}
+            _txt = _workflow_text(wf)
+            check("teks yang dikirim ke gerbang memuat class_type dan string input, supaya "
+                  "classifier stasiun punya sesuatu yang bisa dicocokkan",
+                  "VAELoader" in _txt and "flux" in _txt, _txt[:120])
+    finally:
+        for _k, _old in _saved_env.items():
+            if _old is None:
+                os.environ.pop(_k, None)
+            else:
+                os.environ[_k] = _old
 
     # 4. Provenance & License honesty
     st, why = _upstream_claims_are_true()

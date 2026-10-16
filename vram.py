@@ -37,8 +37,10 @@ GATE_ENV = "IRSOFKA_COMFY_GATE"
 # looking careful. Two spellings of one word, one of them wrong.
 #
 #   ALLOW        the station gate measured the card and there is room
-#   NOT_GPU_WORK no rule matched; this is not a GPU workload (measured: a default Cycles render
-#                on this install runs on the CPU device and takes 0 MiB — see README)
+#   NOT_GPU_WORK the station's rules matched nothing for this text, so the work is not classified
+#                as a GPU workload. For this server the useful reading is queue inspection: a job
+#                that runs is a job ComfyUI itself decided the device for. A diffusion submit that
+#                does reach the card matches a rule and gets ALLOW or DENY, not this.
 #   BYPASSED     the operator turned the gate off with IRSOFKA_COMFY_GATE=off
 # Anything else — UNKNOWN, a refusal, a shape this module does not recognise — is NOT permission.
 GATE_GO = ("ALLOW", "NOT_GPU_WORK", "BYPASSED")
