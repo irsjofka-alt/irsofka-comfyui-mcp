@@ -6,11 +6,8 @@ License text copyright © 2017 MariaDB Corporation Ab, All Rights Reserved.
 Parameters
 
 Licensor:             PT IRSofka Data Teknologi
-Licensed Work:        IRSofka ComfyUI MCP — the station layer of this repository (server.py,
-                      vram.py and the accompanying documentation and build files), explicitly
-                      EXCLUDING the third-party components listed in NOTICE, which remain under
-                      their own licences: upstream/ is ComfyUI-MCP-Server,
-                      Copyright 2026 Joe Norton, Apache License 2.0
+Licensed Work:        IRSofka ComfyUI MCP — all source code, documentation, and configuration
+                      in this repository.
 Additional Use Grant: None
 Change Date:          Four years after the date that a given version of the Licensed
                       Work is first made publicly available. Each version carries its

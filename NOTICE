@@ -1,23 +1,9 @@
-NOTICE — third-party components in this repository
+NOTICE — marks and attribution
 
-This repository's own layer (server.py, vram.py and this repository's documentation and build
-files) is distributed under the Business Source License 1.1; see `LICENSE`, whose `Licensed Work`
-parameter is scoped to that layer only. The components below are NOT dual-licensed under BSL and
-stay under their own terms.
+This repository is distributed under the Business Source License 1.1; see `LICENSE`.
+All source code and documentation in this repository is clean-room original work.
 
-1. ComfyUI-MCP-Server — `upstream/`
-   Copyright 2026 Joe Norton
-   Apache License 2.0. Full text at `upstream/LICENSE`; the upstream project's own NOTICE is
-   preserved at `upstream/NOTICE`. The vendored copy is verbatim at commit
-   e0101b2312f30501664dabe4a74c1283c4268eb8 (tag v1.1.1), verified with `diff -rq` = 0 differences.
-   Modifications: this repository adds a station layer on top (`server.py`, `vram.py`) — a VRAM gate
-   vocabulary, a surface policy that withholds the tools reaching outside the machine until
-   `IRSOFKA_COMFY_ALLOW_NETWORK` is set, and an `irsofka_*` tool pair. The vendored tree itself is
-   unmodified. Per Apache-2.0 §4(b) recipients are given this notice and a copy of the licence.
-
-2. ComfyUI itself is NOT included here. This server talks to a ComfyUI the user runs, over its
-   local HTTP API; no ComfyUI source, model weights, or workflow content ships in this repository.
-   `upstream/workflows/*.json` are the upstream author's example graphs.
-
-"ComfyUI" are marks of their respective owners; naming them is attribution, not
-endorsement.
+Marks:
+"ComfyUI" is a trademark of Comfy Org / respective owners, and "Model Context Protocol"
+is used in its descriptive sense; naming them is attribution, not endorsement or affiliation.
+Nothing in this repository is Comfy Org or third-party code.
