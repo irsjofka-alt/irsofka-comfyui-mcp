@@ -468,9 +468,21 @@ def selftest() -> int:
         for n in ("vram.py", "README.md", "UPSTREAM", "NOTICE")
         if (REPO / n).is_file()
     ]
-    check("tidak ada sisa repositori lain di modul ini: satu nama env, satu merek, satu alat",
-          not any(("BLENDER" in t.upper() or "IRSOVKA" in t.upper()) for t in docs_to_check),
-          "ditemukan nama env atau nama repositori lain di file sumber/dokumen")
+    # Rewritten 2026-10-16 after the publication audit: the old condition also tested for "IRSOVKA",
+    # a misspelling of this project's own brand that appears in NO repository, so half the check
+    # could never fail. Copy-paste between the two MCP servers shows up as the sibling's product
+    # name or the sibling's gate variable, and both are now asserted with a set that can be wrong.
+    gate_names: set[str] = set()
+    for t in docs_to_check:
+        # Uppercase only, deliberately: the environment variable is spelled `IRSOFKA_<X>_GATE` while
+        # prose naming the station's own modules writes them lowercase (`irsofka_gpu_gate`).
+        gate_names |= set(re.findall(r"IRSOFKA_[A-Z]+_GATE", t))
+    check("satu nama env untuk satu alat: dokumen ini hanya menyebut IRSOFKA_COMFY_GATE",
+          gate_names == {"IRSOFKA_COMFY_GATE"},
+          f"nama gate yang ditemukan: {sorted(gate_names)}")
+    check("tidak ada sisa produk lain di modul ini: satu merek, satu alat",
+          not any("BLENDER" in t.upper() for t in docs_to_check),
+          "ditemukan nama produk/alat lain di file sumber/dokumen")
 
     # 16. Document vocabulary honesty
     docs_text = [
@@ -492,7 +504,33 @@ def selftest() -> int:
           and "attribution" in not_text.lower(),
           "LICENSE/NOTICE tidak sesuai spesifikasi BSL clean-room")
 
-    # 18. Self-referential check count verification: README count matches executed checks
+    # 18. Packaging metadata vs the code that ships. The publication audit found `requests` declared
+    #     here while no shipped file imports it — the vendored client that needed it is gone, and the
+    #     manifest stayed. `tools/deps_honesty.py` makes that comparison a command.
+    sys.path.insert(0, str(REPO / "tools"))
+    import deps_honesty
+    deps = deps_honesty.audit(REPO)
+    check("pyproject.toml menyatakan persis pihak ketiga yang diimpor kode yang berangkat",
+          deps["ok"] and not deps["unparseable_files"], json.dumps(deps)[:200])
+
+    # 19. Proof that the check above can fail: the same audit on a fixture that declares a library
+    #     nothing imports, omits one everything imports, and points its package-dir at a directory
+    #     that is not there. All three must be named, and `ok` must be false.
+    with tempfile.TemporaryDirectory() as td:
+        fx = Path(td)
+        (fx / "a.py").write_text("import mcp\nimport numpy\n")
+        (fx / "pyproject.toml").write_text(
+            '[project]\nname = "fx"\ndependencies = ["requests>=2.31", "mcp>=1"]\n'
+            '[tool.setuptools]\npackage-dir = {fx = "gone/src/fx"}\npackages = ["fx"]\n')
+        fx_report = deps_honesty.audit(fx)
+        check("audit dependensi MENOLAK fixture yang kelebihan, kurang, dan menunjuk path kosong",
+              fx_report["declared_but_not_imported"] == ["requests"]
+              and fx_report["imported_but_not_declared"] == ["numpy"]
+              and fx_report["missing_packaging_paths"] == ["gone/src/fx", "gone/src/fx/__init__.py"]
+              and fx_report["ok"] is False,
+              json.dumps(fx_report)[:220])
+
+    # 20. Self-referential check count verification: README count matches executed checks
     readme_text = (REPO / "README.md").read_text(errors="replace") if (REPO / "README.md").is_file() else ""
     m_count = re.search(r"(\d+)\s+checks?", readme_text, re.IGNORECASE)
     expected_count = int(m_count.group(1)) if m_count else -1

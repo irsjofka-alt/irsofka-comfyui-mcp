@@ -9,7 +9,7 @@ over ComfyUI's public HTTP API (default `http://127.0.0.1:8188`).
 
 ```bash
 $ python3 server.py --surface-policy  # what is registered right now, and what is pending consent
-$ python3 server.py --selftest        # 18 checks, no ComfyUI needed, no request ever sent
+$ python3 server.py --selftest        # 21 checks, no ComfyUI needed, no request ever sent
 ```
 
 ## Architecture and Safety Policies

@@ -1,27 +1,30 @@
 # IRSofka ComfyUI MCP — packaging metadata.
 #
-# The sentence above this file used to claim "no third-party dependencies". It stopped being true the
-# moment the Apache-2.0 base was taken over: the vendored client imports `requests`. A metadata file
-# that lies about dependencies installs a server that raises ImportError on first use, so the list is
-# now read from what the vendored tree imports, not from a preference.
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+# Rewritten 2026-10-16 after the clean-room rewrite deleted `upstream/`. The manifest before this
+# comment declared a dependency on `requests` that no shipped file imports, a description crediting
+# the Apache-2.0 base as "taken over", and a `py-modules` list that installs `server` and `vram` at
+# the top level of site-packages — the collision this file's own comments had warned about while
+# doing it. A publication audit found all three by reading the manifest against `git ls-files`.
+# What is declared below is what that comparison confirms.
 
 [project]
 name = "irsofka-comfyui-mcp"
-version = "0.2.0"
-description = "Model Context Protocol server for a self-hosted ComfyUI: the Apache-2.0 ComfyUI-MCP-Server base taken over, with a station VRAM gate in front of every submit"
+version = "0.3.0"
+description = "Model Context Protocol server for a self-hosted ComfyUI: clean-room implementation, station VRAM gate in front of every submit, structured UNAVAILABLE instead of a fabricated result."
 readme = "README.md"
 requires-python = ">=3.10"
-# The base imports these; declaring them is not a preference. `mcp` is the protocol library and
-# `requests` comes from the vendored ComfyUI client. SPDX id for the licence is BUSL-1.1 — "BSL-1.1"
-# is not a valid SPDX expression and makes the build metadata wrong on its face.
+# Measured by `tools/deps_honesty.py` against the AST of the tracked files and asserted by the
+# selftest: `mcp` is the only third-party import, everything else in server.py and vram.py is
+# stdlib (urllib, not requests). SPDX id for the licence is BUSL-1.1 — "BSL-1.1" is not a valid
+# SPDX expression and would make the metadata wrong on its face.
 dependencies = [
   "mcp>=1.26.0,<2",
-  "requests>=2.31",
 ]
 license = "BUSL-1.1"
+# LICENSE holds the BSL grant and its Change Date/Change License parameters, NOTICE holds the
+# trade-mark attribution. Neither names a third-party code licence because no third-party code is
+# distributed here; both files travel with the work so a recipient gets the exception text next to
+# the claim.
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "PT IRSofka Data Teknologi", email = "admin@irsofka.co.id" }]
 keywords = ["comfyui", "mcp", "model-context-protocol", "vram", "image-generation"]
@@ -33,15 +36,22 @@ classifiers = [
   "Topic :: Multimedia :: Graphics",
 ]
 
-# No console script on purpose. The base is loaded from `upstream/` beside `server.py` and imports
-# bare top-level names (`tools`, `models`, `managers`) that must not land in site-packages, so an
-# installed entry point would be a promise this tree cannot keep. Running `python3 server.py` from a
-# checkout is the supported path; the registration on this workstation points at that file.
-
 [project.urls]
 Homepage = "https://irsofka.co.id"
 Issues = "https://irsofka.co.id"
 Support = "admin@irsofka.co.id"
 
+# There is no installable package in this tree. `py-modules = ["server", "vram"]` used to be declared
+# here — that names two of the most collision-prone modules in Python for installation at the top
+# level of site-packages, which is the failure this file's own comment warned about while configuring
+# it. The supported way to run this server is `python3 server.py` from a checkout, which is what the
+# workstation's MCP registration points at. `packages` and `py-modules` are declared empty so
+# setuptools does not auto-discover the root files instead; what an empty build produces was not
+# measured here (this machine has no importable setuptools), so no claim is made about it.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools]
-py-modules = ["server", "vram"]
+packages = []
+py-modules = []
