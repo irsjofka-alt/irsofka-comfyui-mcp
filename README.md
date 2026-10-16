@@ -101,7 +101,7 @@ Lisensi Apache-2.0 upstream mengizinkan pembuatan karya turunan berlisensi Busin
 
 Business Source License 1.1, `LICENSE` in this directory. Licensor **PT IRSofka Data Teknologi**, Additional Use
 Grant **None**, Change Date **four years after each version is first made publicly available** (each
-version carries its own date), Change License **MIT**.
+version carries its own date), Change License **Apache-2.0**.
 
 In practice:
 
@@ -109,7 +109,7 @@ In practice:
   production;
 - production use — running it as part of something you operate for users or for revenue — needs a
   paid commercial licence from the Licensor;
-- every version of this code becomes MIT four years after it is published, so nothing here is
+- every version of this code becomes Apache-2.0 four years after it is published, so nothing here is
   locked forever; the newer versions simply cost a licence until they age;
 - the name and logo are not licensed. Fork the code freely, do not call your fork IRSofka.
 
