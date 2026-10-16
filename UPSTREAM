@@ -27,3 +27,67 @@ All code and documentation in this repository were written clean-room from scrat
    - VRAM gate checks (`vram.py`) evaluate model weights and workload hints.
    - On unmetered systems without workstation telemetry, returns `UNKNOWN` and refuses rather than issuing an unmeasured permit.
    - Outbound network tools (`view_image` with remote URLs) withheld unless approved via `IRSOFKA_COMFY_ALLOW_NETWORK`.
+
+## Measured overlap against the base this server replaced
+
+The vendored base was removed when the server was rewritten clean-room, and it stays reachable in this
+repository's own history at commit `9d30bd4`, so the comparison is repeatable rather than owed to trust:
+
+```
+python3 tools/cleanroom_overlap.py 9d30bd4
+```
+
+The tool's output, pasted verbatim rather than retyped:
+
+```
+base 9d30bd4:upstream/  files=28  lines=5176
+
+server.py: 422 lines | block-shared 30 (7.1%) | exact-line duplicates 62 | longest identical run 3 | identifiers also in base 59/144
+   identical run of 3 lines (at new-file line ~18):
+       | import json
+       | import logging
+       | import os
+   identical run of 2 lines (at new-file line ~70):
+       | return {
+       | "status": "error",
+   identical run of 2 lines (at new-file line ~78):
+       | return {
+       | "status": "error",
+   shared identifiers: 59 total, of which 4 are names the BASE DEFINED at module level (COMFYUI_URL, logger, main, mcp)
+   the rest are vocabulary in use, not definitions: ComfyUIClient, INFO, TemporaryDirectory, __init__, __name__, append, argv, base_url, basicConfig, cancel_job, client, decode, dumps, error, exists, exit
+   most repeated duplicate lines: 9x '@mcp.tool()'; 8x '}'; 6x 'try:'; 4x 'return {'; 3x '"""'; 2x 'except Exception:'
+
+vram.py: 79 lines | block-shared 8 (10.1%) | exact-line duplicates 8 | longest identical run 2 | identifiers also in base 8/26
+   identical run of 2 lines (at new-file line ~18):
+       | import os
+       | import sys
+   shared identifiers: 8 total, of which 0 are names the BASE DEFINED at module level (none)
+   the rest are vocabulary in use, not definitions: get, home, is_file, lower, mode, path, strip, tools
+   most repeated duplicate lines: 2x '"""'; 2x 'try:'; 1x 'import os'; 1x 'import sys'; 1x 'from pathlib import Path'; 1x ')'
+```
+- **Deliberate matches are named, not buried.** This rewrite calls its own client class
+  `ComfyUIClient`, the same name the base used, and keeps the wire tool names
+  (`generate_image`, `run_workflow`, `get_queue_status`) along with the `COMFYUI_URL`
+  configuration variable operators set. The implementation is this file's — a standard-library
+  HTTP client carrying the submit guard — and the naming is a compatibility decision, stated
+  here so a reader who diffs the two repositories finds it as a disclosure and not as a catch.
+
+How to read it, stated by the shape of the numbers rather than by claim:
+
+- **Longest identical run.** The lines that match longest are `import` statements. That is what a
+  reimplementation written against a protocol produces; a rewritten copy produces runs of logic.
+- **Exact-line duplicates** are punctuation: the `@mcp.tool()` decorator repeated once per registered
+  tool, then braces, `try:`, `return {` and docstring delimiters.
+- **Identifiers are split into the two kinds that matter** — names the base DEFINED at module level,
+  which can indict a rewrite, versus names merely USED, which are standard-library and protocol
+  vocabulary. The tool prints the counts and the names apart, so a percentage cannot hide inside a
+  percentage.
+- The tool deliberately excludes its own file from the measurement: comparing the measuring script
+  to the base yields a number about this repository's tooling, not about the server.
+
+**What this does not prove.** Line and name identity measure text. A clean room is a claim about
+process — that nobody read the base while this was written — and no diff can establish that; it can
+only fail it. That is why the runs and the duplicate strings are published in full instead of being
+summarised into a single figure someone would have to trust. The upstream project and its author stay
+named as what they are: the owner of the protocol's other end under its own licence, and not the
+author of this file.
