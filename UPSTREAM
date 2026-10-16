@@ -1,0 +1,37 @@
+UPSTREAM — dari mana kode ini berasal, dan apa yang kami ubah
+
+Status: **diambil alih (fork dari basis terbuka, kode disalin apa adanya).**
+
+Berkas ini dan repositori ini pernah menyatakan sebaliknya — bahwa implementasinya clean-room independen
+dan tidak ada kode yang disalin. Pernyataan itu tidak lagi benar sejak 2026-10-16 08:0x atas perintah
+operator, dan diganti di tempat ia dibaca, bukan dibiarkan; riwayat klaim lamanya ada di commit `c191926`.
+
+## Basis
+
+| | |
+|---|---|
+| proyek | `joenorton/comfyui-mcp-server` ("ComfyUI-MCP-Server") |
+| lisensi | **Apache-2.0** — dibaca dari berkas `LICENSE`, bukan dari label repo: "Apache License Version 2.0 / Copyright 2026 Joe Norton" |
+| berkas NOTICE | `upstream/NOTICE` — "ComfyUI-MCP-Server / Copyright 2026 Joe Norton" |
+| versi yang diambil | 1.1.1, commit `e0101b2312f30501664dabe4a74c1283c4268eb8` (branch `main`, tag `v1.1.1`) |
+| terukur 2026-10-16 | 410 bintang, 85 fork, Python, `pushed_at` 2026-02-17, tidak archived |
+| di repo ini | direktori `upstream/` — **verbatim**, 49 berkas, 6.846 baris Python (10.844 baris total); `diff -rq` terhadap klon sumber = 0 perbedaan |
+| permukaan yang diwarisi | 17 tool MCP terdaftar: `cancel_job`, `generate_image`, `generate_song`, `get_asset_metadata`, `get_defaults`, `get_job`, `get_publish_info`, `get_queue_status`, `list_assets`, `list_models`, `list_workflows`, `publish_asset`, `regenerate`, `run_workflow`, `set_comfyui_output_root`, `set_defaults`, `view_image` |
+
+Kenapa `joenorton/comfyui-mcp-server` dipilih dibanding kandidat lain:
+1. **Bahasa & Bobot Runtime**: Basis ini murni Python (49 berkas, 6.846 LOC) yang langsung selaras dengan lingkungan stasiun tanpa ketergantungan runtime Node.js/npm. Kandidat `artokun/comfyui-mcp` (MIT) membawa 533.848 LOC TypeScript dalam 1.975 berkas yang menuntut rantai kompilasi Node/TypeScript terpisah. Kandidat `0xhackerfren/Comfy-UI-MCP` (MIT) hanya memiliki 4 bintang dan belum matang.
+2. **Kesesuaian Lisensi**: Apache-2.0 adalah lisensi permisif yang secara eksplisit mengizinkan pembuatan karya turunan berlisensi komersial/BSL 1.1 (dengan Change License MIT sesuai keputusan pemegang proyek), dengan kewajiban mempertahankan teks hak cipta, file `LICENSE`, file `NOTICE`, dan penandaan modifikasi. Hal ini menghindari kontaminasi copyleft viral (AGPL/GPL).
+
+## Yang kami tambah/ubah di atas basis
+
+1. `server.py` (milik kami) adalah peluncur FastMCP yang membungkus modul basis dari `upstream/`. Ia menginisialisasi client dan manager tanpa memaksa ComfyUI harus hidup saat start/import, sehingga server dan pengujian tetap deterministik.
+2. **Kebijakan permukaan jaringan.** Tool yang berpotensi memanggil jaringan keluar mesin — `view_image` (yang memanggil `asset_processor.py:215 fetch_asset_bytes` bila diberikan URL HTTP/HTTPS) — **tidak didaftarkan** secara default sampai operator menyetujui lewat `IRSOFKA_COMFY_ALLOW_NETWORK=1`.
+3. **Dua alat stasiun kami sendiri**, di atas permukaan warisan:
+   - `irsofka_gpu_gate`: memeriksa kecukupan VRAM sebelum eksekusi beban kerja GPU lokal lewat `vram.decide()` dengan kosakata `GATE_GO` (`ALLOW`, `NOT_GPU_WORK`, `BYPASSED`), menolak secara aman bila telemetri VRAM tidak terbaca.
+   - `irsofka_surface_policy`: melaporkan status kebijakan jaringan, variabel persetujuan, URL ComfyUI, dan status gerbang VRAM.
+4. **Kosakata gerbang satu sumber**: `vram.py` dipertahankan dengan `GATE_GO` dan `is_go()` yang dipakai bersama oleh server dan pengujian.
+
+## Batas yang jujur
+
+- Pengujian otomatis `--selftest` membuktikan bahwa 49 berkas basis vendored terpasang verbatim, seluruh 17 tool terdaftar, kebijakan izin jaringan memfilter tool keluar secara akurat, dan alat stasiun terpasang di atas basis tanpa perlu ComfyUI hidup.
+- Eksekusi alur kerja nyata (round-trip generasi gambar) tetap membutuhkan ComfyUI berjalan secara lokal pada port yang dikonfigurasi (`COMFYUI_URL`, default `http://localhost:8188`).

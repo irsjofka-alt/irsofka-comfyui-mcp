@@ -1,18 +1,28 @@
-# IRSofka ComfyUI MCP — packaging metadata only. The server has no third-party dependencies:
-# it speaks ComfyUI's HTTP API with the standard library, so installing it cannot drag a
-# licence into a project that did not ask for one.
+# IRSofka ComfyUI MCP — packaging metadata.
+#
+# The sentence above this file used to claim "no third-party dependencies". It stopped being true the
+# moment the Apache-2.0 base was taken over: the vendored client imports `requests`. A metadata file
+# that lies about dependencies installs a server that raises ImportError on first use, so the list is
+# now read from what the vendored tree imports, not from a preference.
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "irsofka-comfyui-mcp"
-version = "0.1.0"
-description = "Model Context Protocol server for a self-hosted ComfyUI, with a VRAM gate in front of every submit"
+version = "0.2.0"
+description = "Model Context Protocol server for a self-hosted ComfyUI: the Apache-2.0 ComfyUI-MCP-Server base taken over, with a station VRAM gate in front of every submit"
 readme = "README.md"
-requires-python = ">=3.9"
-license = "BSL-1.1"
-license-files = ["LICENSE"]
+requires-python = ">=3.10"
+# The base imports these; declaring them is not a preference. `mcp` is the protocol library and
+# `requests` comes from the vendored ComfyUI client. SPDX id for the licence is BUSL-1.1 — "BSL-1.1"
+# is not a valid SPDX expression and makes the build metadata wrong on its face.
+dependencies = [
+  "mcp>=1.26.0,<2",
+  "requests>=2.31",
+]
+license = "BUSL-1.1"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "PT IRSofka Data Teknologi", email = "admin@irsofka.co.id" }]
 keywords = ["comfyui", "mcp", "model-context-protocol", "vram", "image-generation"]
 classifiers = [
@@ -23,8 +33,10 @@ classifiers = [
   "Topic :: Multimedia :: Graphics",
 ]
 
-[project.scripts]
-irsofka-comfyui-mcp = "server:main"
+# No console script on purpose. The base is loaded from `upstream/` beside `server.py` and imports
+# bare top-level names (`tools`, `models`, `managers`) that must not land in site-packages, so an
+# installed entry point would be a promise this tree cannot keep. Running `python3 server.py` from a
+# checkout is the supported path; the registration on this workstation points at that file.
 
 [project.urls]
 Homepage = "https://irsofka.co.id"

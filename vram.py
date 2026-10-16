@@ -9,21 +9,44 @@ Two states, and they are deliberately different prices:
 
   gate="ai-station"  -> the decision comes from gpu_gate, thresholds from its config,
                         re-read on every call.
-  gate="absent"      -> no workstation on this machine. Read-only tools keep working.
-                        A submit whose text matches a known-heavy class is refused,
-                        because "we could not find the guard" is not evidence that
-                        the work is safe.
+  gate="absent"      -> no workstation on this machine, so there is no meter, no threshold and
+                        no holder to name. The answer is `UNKNOWN`: a missing guard is not
+                        evidence that the work is safe, and this module will not issue a permit
+                        it cannot sign.
 
-`IRSOVKA_COMFY_GATE=off` is the escape hatch for a machine that has no workstation
-and where the operator accepts the risk of an OOM. It is opt-in and it is stamped
-into every answer it touches, so nothing submitted under it can later be mistaken
-for a gated submission.
+`IRSOFKA_COMFY_GATE=off` is the escape hatch for a machine that has no workstation and where
+the operator accepts the risk of an OOM. It is opt-in and it is stamped into every answer it
+touches (`state: BYPASSED`), so nothing submitted under it can later be mistaken for a gated
+submission.
 """
 from __future__ import annotations
 
 import os
 import sys
 from pathlib import Path
+
+# Named once, spelled the same in every answer that touches it. The `off` value is the only one
+# this reads; any other value leaves the gate in charge.
+GATE_ENV = "IRSOFKA_COMFY_GATE"
+
+# The states that mean "go", spelled once. The words belong to the station's `gpu_gate.py`
+# (ALLOW / NOT_GPU_WORK / UNKNOWN / DENY); this module adds BYPASSED for the opt-out below.
+#
+# Why a list and not a truthiness check: on 2026-10-15 a caller invented its own test —
+# `verdict.get("allow")`, a key `decide()` has never returned — and refused every render while
+# looking careful. Two spellings of one word, one of them wrong.
+#
+#   ALLOW        the station gate measured the card and there is room
+#   NOT_GPU_WORK no rule matched; this is not a GPU workload (measured: a default Cycles render
+#                on this install runs on the CPU device and takes 0 MiB — see README)
+#   BYPASSED     the operator turned the gate off with IRSOFKA_COMFY_GATE=off
+# Anything else — UNKNOWN, a refusal, a shape this module does not recognise — is NOT permission.
+GATE_GO = ("ALLOW", "NOT_GPU_WORK", "BYPASSED")
+
+
+def is_go(verdict: dict) -> bool:
+    return (verdict or {}).get("state") in GATE_GO
+
 
 HEAVY_HINTS = (
     "trellis", "pixal3d", "image-to-3d", "image_to_3d", "3d_pipeline", "voxel remesh",
@@ -60,7 +83,7 @@ def _load_gate():
 
 
 def mode() -> str:
-    if os.environ.get("IRSOVKA_COMFY_GATE", "").strip().lower() == "off":
+    if os.environ.get(GATE_ENV, "").strip().lower() == "off":
         return "off"
     gate, _ = _load_gate()
     return "ai-station" if gate is not None else "absent"
@@ -71,19 +94,18 @@ def decide(text: str) -> dict:
     m = mode()
     if m == "off":
         return {"state": "BYPASSED", "gate": "off",
-                "why": "IRSOVKA_COMFY_GATE=off on a machine without a workstation gate"}
+                "why": f"{GATE_ENV}=off on a machine without a workstation gate"}
     gate, root = _load_gate()
     if gate is None:
+        # No meter here, so nothing can be measured and nothing can be promised. This is the
+        # branch an outside user hits first, and it refuses rather than issuing a permit this
+        # module cannot sign: `ALLOW` here would be an implicit yes wearing a confident word.
         heavy = [w for w in HEAVY_HINTS if w in (text or "").lower()]
-        if heavy:
-            return {"state": "UNKNOWN", "gate": "absent", "matched": heavy[0],
-                    "why": "no ai-station on this machine, so no VRAM gate; refusing a "
-                           "known-heavy submit (set IRSOVKA_COMFY_GATE=off to override)"}
-        # Degraded, not blind: this machine has no gate, so there is no threshold to check
-        # against and no holder to name. `unaudited` rides along with the answer so a submit
-        # made here can never be mistaken later for one the gate cleared.
-        return {"state": "ALLOW", "gate": "absent", "unaudited": True,
-                "why": "no gate on this machine and no heavy-class keyword; submitting unaudited"}
+        return {"state": "UNKNOWN", "gate": "absent",
+                **({"matched": heavy[0]} if heavy else {}),
+                "why": "no workstation gate on this machine, so VRAM cannot be measured; "
+                       f"refusing rather than guessing. Set {GATE_ENV}=off to accept the risk "
+                       "of an out-of-memory yourself"}
     try:
         res = dict(gate.gate(text))
     except Exception as exc:  # the gate exists but threw: refuse with its name
@@ -95,9 +117,9 @@ def decide(text: str) -> dict:
 
 
 def report() -> dict:
-    """What the operator sees in comfy_status: which gate is live and what it says now."""
+    """What the operator sees in `irsofka_gpu_gate`: which gate is live and what it says now."""
     gate, root = _load_gate()
-    if gate is None or os.environ.get("IRSOVKA_COMFY_GATE", "").strip().lower() == "off":
+    if gate is None or os.environ.get(GATE_ENV, "").strip().lower() == "off":
         return {"gate": mode(), "root": str(root) if root else None}
     try:
         st = gate.status()

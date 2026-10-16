@@ -1,7 +1,11 @@
 # IRSofka ComfyUI MCP
 
 A stdio [Model Context Protocol](https://modelcontextprotocol.io) server for the ComfyUI you run
-yourself. Seven tools over ComfyUI's own HTTP API — no cloud, no account, no telemetry.
+yourself. It is **a takeover, not a rewrite**: the base is
+[ComfyUI-MCP-Server](https://github.com/joenorton/comfyui-mcp-server) by Joe Norton (Apache-2.0),
+vendored verbatim, and this repository adds the station's gate and consent policy on top of its 17
+tools. No cloud, no account, no telemetry — and nothing that reaches outside the machine unless you
+say so.
 
 Its central behaviour is one line: **a submit that the machine cannot pay for is refused before it is
 sent, and the refusal names who is holding the VRAM.** Whether other ComfyUI MCPs do this was not
@@ -12,7 +16,7 @@ file that the engine making the request was not reading.
 
 ```
 $ python3 server.py --status | head -20          # read-only, safe
-$ python3 server.py --selftest                   # 61 checks, fake transport, never touches your server
+$ python3 server.py --selftest                   # 12 checks, no ComfyUI needed, no request ever sent
 ```
 
 ## The gate
@@ -27,27 +31,35 @@ it. This server calls it and adds no policy of its own. Three states, priced dif
 | `DENY` | free < needed | refuses, names the top holders and the shortfall in MiB, sends **nothing** |
 | `UNKNOWN` | the meter could not be read | refuses. Absence of a measurement is not evidence of free VRAM |
 
-If the workstation is not on this machine, the server degrades rather than dying: read-only tools keep
-working, a submit matching a known-heavy class (`trellis`, `flux`, `sdxl`, `controlnet`, …) is refused
-as `UNKNOWN`, and anything else submits **stamped `"unaudited": true`** so a decision made without a
-guard can never be mistaken later for one that passed one. `IRSOVKA_COMFY_GATE=off` is the explicit
-override for a machine with no workstation and an operator who accepts OOM risk; it appears in every
-answer it touches as `gate_state: "BYPASSED"`.
+If the workstation is not on this machine, there is no meter, so `vram.decide()` answers `UNKNOWN`:
+a missing guard is not evidence that the work is safe, and the server refuses rather than issuing
+a permit it cannot sign. `IRSOFKA_COMFY_GATE=off` is the explicit override for a machine with no
+workstation and an operator who accepts OOM risk; it appears in every answer it touches as
+`state: "BYPASSED"`.
 
 ## Tools
 
-| tool | endpoint | note |
-|---|---|---|
-| `comfy_status` | `GET /system_stats` | version, per-device VRAM in MiB, live gate report. ComfyUI's own `argv` is **withheld** unless `include_argv=true` — it can carry tokens and it is your machine, not our data |
-| `comfy_queue` | `POST /prompt` | behind the gate. Takes an API-format graph inline or from a file |
-| `comfy_job` | `GET /history/<id>`, `GET /queue`, `POST /interrupt`, `POST /queue {clear}` | `interrupt` and `clear` need `confirm=true`: they stop work that may be someone else's |
-| `comfy_object` | `GET /object_info/<name>` | up to 20 named classes, or `action=names` for the class-name list only |
-| `comfy_upload` | `POST /upload/image` | returns the exact name a `LoadImage` node must reference |
-| `comfy_fetch` | `GET /view` | writes to disk and returns **sha256**, so a run is compared by content and not by filename |
-| `comfy_free` | `POST /free` | needs `confirm=true`; applies at the next queue iteration, and cannot touch VRAM held by another process |
+The base contributes 17 tools and the station layer adds two. Names come from the running server
+(`--surface-policy`), not from a document:
 
-## Measured on this machine, 2026-10-15
+| group | tools |
+|---|---|
+| generation and workflow (base) | `generate_image`, `generate_song`, `run_workflow`, `regenerate`, `view_image` |
+| jobs and queue (base) | `get_job`, `cancel_job`, `get_queue_status` |
+| models, assets, workflows (base) | `list_models`, `list_assets`, `list_workflows`, `get_asset_metadata`, `get_defaults`, `set_defaults`, `get_publish_info`, `set_comfyui_output_root`, `publish_asset` |
+| station layer (ours) | `irsofka_gpu_gate`, `irsofka_surface_policy` |
 
+`view_image` is the one tool that can make the machine fetch a URL someone supplied, so it is **not
+registered** until `IRSOFKA_COMFY_ALLOW_NETWORK` consents; `irsofka_surface_policy` says whether it is
+live. `publish_asset` despite its name writes to a session-scoped local registry — checked, not
+assumed — so it is not gated as network.
+
+## Measured on this machine, 2026-10-15 — the layer before the takeover
+
+These numbers were produced by the seven-tool clean-room server that this repository contained until
+2026-10-16, and the tool names below (`comfy_status`, `comfy_fetch`, `comfy_free`) belong to that
+build. They are kept because they are measurements that happened, not documentation to imitate; the
+VRAM-gate behaviour they describe is what the station layer still does, now over the base's tools.
 Nothing here is quoted from documentation. RTX 3060 12 GB, ComfyUI Desktop standalone:
 
 | fact | value |
@@ -73,22 +85,11 @@ torch pool; the whole-card meter reports what the card has left, including what 
 The gate decides on the whole-card number, because an OOM does not respect the boundary between
 "my process" and "someone else's".
 
-## How this was written, and what that costs
+## Basis Open-Source dan Provenansi
 
-Written against ComfyUI's own documented HTTP API, with the Python standard library, in the same
-hand-rolled JSON-RPC-over-stdio style this workstation already uses for its own desktop MCP server.
-**No substantive line of `comfy_mcp` is in `server.py` — nothing was copied, translated or adapted from it** — and the claim is measured, which is also why it says "substantive": compared against the installed `comfy_mcp` package (11 files, 6 888 significant lines), this server's 654 significant lines share **7 normalised lines**, all of them boilerplate any file of this shape contains (`from __future__ import annotations`, `except Exception as exc:`, `if __name__ == "__main__":`, `if not isinstance(data, dict):`, `if action == "list":`). Longest consecutive run **1**; no shared private identifier. Only `server.py` was compared against only that package; no other ComfyUI MCP was compared at all. A line-level comparison cannot see a translation that kept the structure and renamed everything, so that is the limit of the claim as well as its method.
-Said plainly because the strict meaning of "clean room" is that the implementers never saw the
-original, and that is not what happened: `comfy-mcp`'s `server.py` was read once, to count its tool
-definitions for a documentation correction, and its `LICENSE` and `NOTICE` were read for the analysis
-below. Exposure happened; derivation did not. Read it as the whole answer rather than inferring more
-protection from the phrase "clean room" than the history supports.
+Repositori ini telah **mengambil alih basis terbuka `joenorton/comfyui-mcp-server`** (Apache-2.0, tag v1.1.1, commit `e0101b2312f30501664dabe4a74c1283c4268eb8`, 49 berkas, 6.846 LOC Python) yang disimpan verbatim di `upstream/`. Klaim clean-room / independen sebelumnya ("nothing was copied, translated or adapted") telah ditarik dan digantikan oleh dokumen [UPSTREAM](UPSTREAM).
 
-That is a legal choice as much as a technical one. ComfyUI is **GPL-3.0-or-later**; the two better-known
-MCP servers around it are **AGPL-3.0** (one of them dual-licensed "AGPL or commercial"). A work built
-by translating or adapting their code would carry those terms. A program that talks to a server over
-its network API is a separate work, so this repository is free to be under its own licence — and the
-licence it is under is the one below.
+Lisensi Apache-2.0 upstream mengizinkan pembuatan karya turunan berlisensi Business Source License 1.1 (dengan Change License MIT) dengan tetap menyertakan hak cipta dan `NOTICE` asli di `upstream/NOTICE`. Lapisan stasiun di `server.py` menambahkan penegakan gerbang VRAM (`vram.py`) dan pembatasan izin akses jaringan eksternal (`IRSOFKA_COMFY_ALLOW_NETWORK`).
 
 ## License
 
@@ -111,9 +112,14 @@ Commercial licence and showcase enquiries: <admin@irsofka.co.id> — <https://ir
 
 ## Registering it
 
-Run it directly: `python3 server.py`. There is nothing to install — the AST scan in the selftest
-confirms both modules import only the standard library (`gpu_gate` is imported lazily and only when
-a workstation is present, so it is a bridge, not a dependency).
+Run it from a checkout: `python3 server.py`, with `mcp` and `requests` installed. `pip install .`
+installs the station layer **only** — the base is loaded from `upstream/` beside `server.py`, and its
+internal imports use bare top-level names (`tools`, `models`, `managers`) that must not be installed
+into site-packages. There is therefore deliberately no console script: an entry point that cannot work
+is worse than none, which is the same lesson the packaging audit produced today. The AST scan in the selftest
+confirms our two files import only the standard library plus `mcp` — the third-party imports live in
+the vendored base, which is exactly why the dependency list above is not empty. The station's gate is
+imported lazily and only when a workstation is present, so it is a bridge, not a dependency.
 
 `pyproject.toml` is committed for packaging, but **it has not been built here**: this machine's system
 Python has no `setuptools` and `python3 -m venv` cannot seed one offline, so `python -m build` was
@@ -129,7 +135,7 @@ client; both CLIs read their own file.
     "irsofka-comfyui": {
       "command": "python3",
       "args": ["/ABSOLUTE/PATH/TO/irsofka-comfyui-mcp/server.py"],
-      "env": { "IRSOVKA_COMFY_URL": "http://127.0.0.1:8188" }
+      "env": { "COMFYUI_URL": "http://127.0.0.1:8188" }
     }
   }
 }
@@ -137,9 +143,12 @@ client; both CLIs read their own file.
 
 | variable | default | effect |
 |---|---|---|
-| `IRSOVKA_COMFY_URL` | `http://127.0.0.1:8188` | which ComfyUI to talk to |
-| `AI_STATION_HOME` | `~/.ai-station` | where the gate lives. If set and it holds no gate, the answer is *no gate* — this server does not quietly look somewhere else |
-| `IRSOVKA_COMFY_GATE` | unset | `off` disables the gate by operator order; every affected answer then says `BYPASSED` |
+| `COMFYUI_URL` | `http://127.0.0.1:8188` | which ComfyUI to talk to |
+| `AI_STATION_HOME` | `$HOME/.ai-station` | where the station gate lives. If set and it holds no gate, the answer is *no gate* — this server does not quietly look somewhere else |
+| `IRSOFKA_COMFY_GATE` | unset | `off` disables the gate by operator order; every affected answer then says `BYPASSED` |
+| `IRSOFKA_COMFY_ALLOW_NETWORK` | unset (refuse) | registers `view_image`, the one tool that can fetch a caller-supplied URL |
+| `COMFYUI_OUTPUT_ROOT` | auto-detected | where ComfyUI writes its images, for `view_image` |
+| `COMFY_MCP_ASSET_TTL_HOURS` | `24` | how long a fetched asset stays in the local registry |
 
 ## What this server will not do
 
