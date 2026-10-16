@@ -12,9 +12,11 @@ Diukur pada sha e0101b2312f30501664dabe4a74c1283c4268eb8 (v1.1.1, Apache-2.0, 41
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -471,6 +473,19 @@ def selftest() -> int:
             else:
                 os.environ[_k] = _old
 
+    # 3e. Setiap flag yang DIKLAM README harus benar-benar ditangani main(). Verifier ronde publikasi
+    # menemukan `--status` diiklankan sebagai "read-only, safe" padahal tidak ada: argv jatuh ke
+    # transport stdio dan proses menunggu selamanya. Yang diukur di sini bukan satu flag itu saja,
+    # karena flag hantu berikutnya akan lahir dengan cara yang sama.
+    _src_main = inspect.getsource(main)
+    _rm = (REPO / "README.md").read_text(errors="replace") if (REPO / "README.md").is_file() else ""
+    _advertised = sorted({m.group(1) for m in re.finditer(r"server\.py\s+--([a-z][\w-]*)", _rm)})
+    _missing = [f for f in _advertised if f"--{f}" not in _src_main]
+    check("semua flag yang diiklankan README ditangani main() (tidak ada flag hantu yang berujung "
+          "proses menggantung)",
+          bool(_advertised) and not _missing,
+          f"diiklankan={_advertised} tidak ditangani={_missing}")
+
     # 4. Provenance & License honesty
     st, why = _upstream_claims_are_true()
     check("baris Status UPSTREAM menyatakan ambil-alih Apache-2.0, bukan clean room", st, why)
@@ -512,7 +527,7 @@ def selftest() -> int:
     # (termasuk dirinya), jadi README tidak bisa lagi mengklaim jumlah yang salah.
     import re as _re
     _readme = (REPO / "README.md").read_text(errors="replace") if (REPO / "README.md").is_file() else ""
-    _claimed = sorted({int(n) for n in _re.findall(r"#\s*(\d+)\s+checks?", _readme)})
+    _claimed = sorted({int(n) for n in re.findall(r"#\s*(\d+)\s+checks?", _readme)})
     _total = len(results) + 1
     check(
         f"jumlah check yang DITULIS README sama dengan yang benar-benar berjalan "
@@ -535,6 +550,24 @@ def main(argv) -> int:
         _mcp, report = build()
         print(json.dumps(report, indent=2))
         return 0 if report.get("ok") else 1
+
+    if "--status" in argv:
+        # README mengiklankan perintah ini dan sebelumnya tidak ada: yang terjadi adalah server
+        # masuk ke transport stdio lalu menunggu selamanya — perintah yang didokumentasikan sebagai
+        # "read-only, safe" berubah menjadi proses menggantung. Flag yang terdokumentasi harus
+        # mengembalikan sesuatu, atau tidak boleh terdokumentasi.
+        import vram
+        _mcp, report = build()
+        print(json.dumps({
+            "comfyui_url": COMFYUI_URL,
+            "network": {"allow": network_allowed(), "consent_env": ALLOW_NETWORK_ENV,
+                        "withheld": sorted(NETWORK_TOOLS)},
+            "gate": {"mode": vram.mode(), "env": vram.GATE_ENV, "vocab": list(vram.GATE_GO)},
+            "submit_interception": dict(_GATE_REPORT),
+            "verdict_for_a_read_only_intent": vram.decide("status probe, no workload requested"),
+            "surface_policy_ok": bool(report.get("ok")),
+        }, indent=2))
+        return 0
 
     mcp, _report = build()
     # If called with --http or standalone
